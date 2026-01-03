@@ -3,6 +3,7 @@ import os
 import json
 import base64
 import time
+import re
 from utils import generate_pdf, generate_ppt, load_chat_history, save_chat_history
 
 # Import Prompts
@@ -106,6 +107,20 @@ def get_completion(client, prompt, model="gpt-3.5-turbo"):
         st.error(f"OpenAI API Error: {e}")
         return None
 
+def extract_json(text):
+    """
+    Robustly extracts JSON object from a string using regex.
+    """
+    try:
+        # Find the first opening brace and the last closing brace
+        match = re.search(r'\{.*\}', text, re.DOTALL)
+        if match:
+            json_str = match.group(0)
+            return json.loads(json_str)
+        return None
+    except json.JSONDecodeError:
+        return None
+
 # --- Main Layout ---
 tab1, tab2, tab3 = st.tabs(["1️⃣ Course Configuration", "2️⃣ Outline Review", "3️⃣ Final Content"])
 
@@ -131,7 +146,14 @@ with tab1:
             submitted = st.form_submit_button("✨ Generate Outline", type="primary")
 
     with col_info:
-        st.info("### How it works\n1. **Define**: Enter the topic and parameters for your course.\n2. **Generate**: AI creates a structured outline based on Bloom's Taxonomy.\n3. **Review**: Check and Edit the outline.\n4. **Export**: Generate full lesson content and export to PDF/PPT.")
+        with st.expander("ℹ️ How it works", expanded=True):
+            st.markdown("""
+            1. **Define**: Enter the topic and parameters for your course.
+            2. **Generate**: AI creates a structured outline based on Bloom's Taxonomy.
+            3. **Review**: Check and Edit the outline.
+            4. **Export**: Generate full lesson content and export to PDF/PPT/Markdown.
+            """)
+        
         if not HAS_OPENAI:
             st.error("❌ OpenAI library not found. Please rebuild the app.")
         elif not get_api_client():
@@ -201,17 +223,17 @@ with tab3:
             with st.status("🔍 Analyzing structure...", expanded=True) as status:
                 st.write("Parsing outline into modules...")
                 dict_prompt = DICTATOR_PROMPT + "\n\nCourse Outline:\n" + st.session_state['course_outline']
-                json_str = get_completion(client, dict_prompt)
+                raw_response = get_completion(client, dict_prompt)
                 
-                try:
-                    if json_str:
-                        # Clean cleanup of potential markdown code blocks
-                        json_str = json_str.replace("```json", "").replace("```", "").strip()
-                        st.session_state['module_dict'] = json.loads(json_str)
-                        status.update(label="Structure analyzed!", state="complete", expanded=False)
-                except Exception as e:
+                # Use robust extraction
+                module_dict = extract_json(raw_response)
+                
+                if module_dict:
+                    st.session_state['module_dict'] = module_dict
+                    status.update(label="Structure analyzed!", state="complete", expanded=False)
+                else:
                     status.update(label="Error parsing outline", state="error")
-                    st.error(f"Parsing Error: {e}. Please ensure the outline matches the expected format.")
+                    st.error(f"Failed to parse AI response into JSON. Response was: {raw_response[:200]}...")
                     st.stop()
 
         # 2. Generate Content
@@ -266,50 +288,59 @@ with tab3:
             with results_container:
                 st.subheader("Course Content Preview")
                 
-                col_d1, col_d2 = st.columns(2)
+                # Download Columns
+                d_cols = st.columns(3)
                 
                 # PDF Generation
                 if st.session_state.get("final_content"):
+                    final_txt = st.session_state["final_content"]
+                    course_name_safe = st.session_state.get('course_name', 'Course').replace(" ", "_")
                     
                     # Generate Files on the fly
-                    pdf_result = generate_pdf(st.session_state["final_content"], "course.pdf")
-                    ppt_result = generate_ppt(st.session_state["final_content"], "course.pptx")
+                    pdf_result = generate_pdf(final_txt, "course.pdf")
+                    ppt_result = generate_ppt(final_txt, "course.pptx")
                     
-                    with col_d1:
+                    # 1. PDF
+                    with d_cols[0]:
                         if pdf_result:
                             try:
-                                # FPDF output returns a string/bytes depending on usage. 
-                                # Here we rely on file saving in utils, then reading it back.
                                 with open("course.pdf", "rb") as f:
                                     pdf_data = f.read()
-                                
                                 st.download_button(
-                                    label="📄 Download Course PDF",
+                                    label="📄 Download PDF",
                                     data=pdf_data,
-                                    file_name=f"{st.session_state.get('course_name', 'Course')}.pdf",
+                                    file_name=f"{course_name_safe}.pdf",
                                     mime="application/pdf",
                                     type="primary"
                                 )
                             except Exception as e:
-                                st.error(f"PDF download error: {e}")
+                                st.error(f"PDF error: {e}")
                     
-                    with col_d2:
+                    # 2. PPT
+                    with d_cols[1]:
                         if ppt_result:
                             try:
                                 with open("course.pptx", "rb") as f:
                                     ppt_data = f.read()
-                                    
                                 st.download_button(
-                                    label="📊 Download Course PPT",
+                                    label="📊 Download PPT",
                                     data=ppt_data,
-                                    file_name=f"{st.session_state.get('course_name', 'Course')}.pptx",
+                                    file_name=f"{course_name_safe}.pptx",
                                     mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
                                     type="primary"
                                 )
                             except Exception as e:
-                                st.error(f"PPT download error: {e}")
-                        else:
-                            st.warning("PPT generation failed or library missing.")
+                                st.error(f"PPT error: {e}")
+                                
+                    # 3. Markdown
+                    with d_cols[2]:
+                        st.download_button(
+                            label="📝 Download Markdown",
+                            data=final_txt,
+                            file_name=f"{course_name_safe}.md",
+                            mime="text/markdown",
+                            type="primary"
+                        )
 
                 with st.expander("👀 View Full Text Content", expanded=False):
                     st.markdown(st.session_state["final_content"])

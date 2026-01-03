@@ -13,8 +13,11 @@ def generate_coursify_prompt(lesson_name, module_name, course_name):
             6) Seamlessly integrate relevant tangential concepts or background information as needed to provide a well-rounded learning experience, ensuring learners have the necessary foundational knowledge.
             7) Maintain a conversational, approachable tone while ensuring accuracy and depth of content, as if you were an experienced instructor teaching the material.
 
-            Remember, the goal is to create a comprehensive and self-contained learning resource on the specified topic, with the level of detail and instructional quality that one would expect from an expert instructor. Your output should be formatted using Markdown for clarity and easy integration into course platforms.
-            Note: Add a blank line at the end of the course content.
-            Make sure the content generated is easily convertible to a sensible using HTML Tags.
+            Remember, the goal is to create a comprehensive and self-contained learning resource on the specified topic, with the level of detail and instructional quality that one would expect from an expert instructor. 
+            
+            Formatting Guidelines:
+            - Your output should be formatted using **Markdown** for clarity.
+            - Use **LaTeX** formatting for any mathematical formulas or scientific expressions (e.g., $E=mc^2$).
+            - Add a blank line at the end of the course content.
             """
     return COURSIFY_PROMPT
