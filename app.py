@@ -1,20 +1,17 @@
 import streamlit as st
-from dotenv import load_dotenv
 import os
 import json
 import base64
 import time
 from utils import generate_pdf, load_chat_history, save_chat_history
 
-# Customizing the page configuration
+# Customizing the page configuration - MUST be the first streamlit command
 st.set_page_config(
     page_title="Automated Course Content Generator",
     page_icon=":robot:",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
-
-load_dotenv()
 
 st.title("Automated Course Content Generator 🤖 (Dummy Mode)")
 
@@ -215,14 +212,21 @@ with col2:
             # PDF Generation
             if "pdf" not in st.session_state:
                 st.session_state.pdf = True # Mark as done
+                
                 # We generate PDF from the accumulated content
                 pdf_obj = generate_pdf(full_content_accumulator, "course.pdf")
-                b64 = base64.b64encode(pdf_obj.output(dest="S").encode('latin1')).decode()
                 
-                st.success("All content generated! Your PDF is ready.")
-                st.download_button(
-                    label="Download PDF", 
-                    data=b64, 
-                    file_name="course.pdf", 
-                    mime="application/pdf"
-                )
+                if pdf_obj:
+                    try:
+                        b64 = base64.b64encode(pdf_obj.output(dest="S").encode('latin1')).decode()
+                        st.success("All content generated! Your PDF is ready.")
+                        st.download_button(
+                            label="Download PDF", 
+                            data=b64, 
+                            file_name="course.pdf", 
+                            mime="application/pdf"
+                        )
+                    except Exception as e:
+                        st.error(f"Failed to create PDF download: {str(e)}")
+                else:
+                    st.warning("PDF generation skipped (missing dependencies or error). View content above.")
