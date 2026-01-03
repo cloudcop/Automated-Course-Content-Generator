@@ -14,12 +14,15 @@ def main():
             break
     
     # Construct the Streamlit command
+    # We use -m streamlit to ensure we use the installed module
+    # We force headless mode to prevent email prompts
     cmd = [
         sys.executable, "-m", "streamlit", "run", "app.py",
         "--server.port", port,
         "--server.address", "0.0.0.0",
         "--server.headless", "true",
-        "--browser.gatherUsageStats", "false"
+        "--browser.gatherUsageStats", "false",
+        "--theme.base", "light"
     ]
     
     print(f"Starting Streamlit on port {port}...")
