@@ -1,0 +1,11 @@
+{
+  "name": "automated-course-content-generator",
+  "version": "1.0.0",
+  "description": "Streamlit App",
+  "main": "app.py",
+  "scripts": {
+    "start": "streamlit run app.py"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
