@@ -4,8 +4,8 @@
   "description": "Streamlit App",
   "main": "app.py",
   "scripts": {
-    "start": "streamlit run app.py --server.port 3000 --server.address 0.0.0.0",
-    "dev": "streamlit run app.py --server.port 3000 --server.address 0.0.0.0"
+    "start": "pip install -r requirements.txt && python -m streamlit run app.py --server.port 3000 --server.address 0.0.0.0",
+    "dev": "pip install -r requirements.txt && python -m streamlit run app.py --server.port 3000 --server.address 0.0.0.0"
   },
   "dependencies": {},
   "devDependencies": {}
