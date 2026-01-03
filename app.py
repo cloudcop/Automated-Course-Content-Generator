@@ -3,24 +3,11 @@ import streamlit as st
 from dotenv import load_dotenv
 import os
 import json
-import shelve
-import unicodedata
-from fpdf import FPDF # type: ignore
 import base64
-# from prompts.coursify_prompt import COURSIFY_PROMPT
+from utils import generate_pdf, load_chat_history, save_chat_history
 from prompts.tabler_prompt import TABLER_PROMPT
 from prompts.dictator_prompt import DICTATOR_PROMPT
 from prompts.quizzy_prompt import QUIZZY_PROMPT
-
-
-def generate_pdf(content, filename):
-    content = unicodedata.normalize('NFKD', content).encode('ascii', 'ignore').decode('ascii')
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font('Arial', 'B', 12)
-    pdf.multi_cell(0, 10, content)
-    pdf.output(filename, 'F')
-    return pdf
 
 # Customizing the page configuration
 st.set_page_config(
@@ -48,16 +35,6 @@ except OpenAIError as e:
 # Ensure openai_model is initialized in session state
 if "openai_model" not in st.session_state:
     st.session_state["openai_model"] = "gpt-3.5-turbo"
-
-# Load chat history from shelve file
-def load_chat_history():
-    with shelve.open("chat_history") as db:
-        return db.get("messages", [])
-
-# Save chat history to shelve file
-def save_chat_history(messages):
-    with shelve.open("chat_history") as db:
-        db["messages"] = messages
 
 # Initialize or load chat history
 if "messages" not in st.session_state:
@@ -101,8 +78,6 @@ with col1:
     st.session_state.course_duration = course_duration
     st.session_state.course_credit = course_credit
 
-
-
     button1, button2 = st.columns([1, 0.8])
     with button1:
         generate_button = st.button("Generate Course Outline", help="Click me to generate course outline!😁")
@@ -118,9 +93,6 @@ with col1:
                 st.session_state.course_credit = ""
                 st.session_state.pdf = False
                 st.experimental_rerun()
-                
-    
-
 
 with col2:
     st.header("Generated Course Content 📝")
@@ -139,9 +111,6 @@ with col2:
             ]
         )
         generated_prompt = response.choices[0].message.content
-        # st.success("Prompt generated successfully!")
-        # st.write(generated_prompt)
-        
         
         with st.spinner("Generating course outline..."):
             response = client.chat.completions.create(
@@ -154,13 +123,9 @@ with col2:
             Course_outline = response.choices[0].message.content
             st.success("Course outline generated successfully!")
 
-            # with st.expander("Course Outline"):
-            #     st.write(Course_outline)
-
             st.session_state['course_outline'] = Course_outline
             st.session_state['buttons_visible'] = True
 
-    
     if 'course_outline' in st.session_state and "pdf" not in st.session_state:
         with st.expander("Course Outline"):
             st.write(st.session_state['course_outline'])
@@ -190,12 +155,8 @@ with col2:
                         ]
                     )
                     Dict = response.choices[0].message.content
-                    # st.success("DICTator is here!")
-                    # st.write(Dict)
-
                     
                     module_lessons = json.loads(Dict)
-                    # st.write(module_lessons)
 
                     for module_name in module_lessons:
                         module_content = ""
@@ -224,7 +185,6 @@ with col2:
                                     model=st.session_state["openai_model"],
                                     messages=[
                                         {"role": "system", "content": module_lesson_prompt},
-                                        # {"role": "user", "content": st.session_state['course_outline']},
                                     ]
                                 )
                                 complete_course = response.choices[0].message.content
@@ -240,7 +200,6 @@ with col2:
                                 model=st.session_state["openai_model"],
                                 messages=[
                                     {"role": "system", "content": quizzy_prompt_final},
-                                    # {"role": "user", "content": st.session_state['course_outline']},
                                 ]
                             )
                             quiz_questions = res.choices[0].message.content
@@ -258,9 +217,7 @@ with col2:
                             button_label = "Download PDF"
                             st.download_button(label=button_label, data=b64, file_name="course.pdf", mime="application/pdf", key="download_pdf_button")
                                     
-
                         break
-
                 
             elif 'modifications' in st.session_state:
                 modifications = st.text_input("Please enter the modifications you'd like to make:")
@@ -290,12 +247,8 @@ with col2:
                             ]
                         )
                         Dict = response.choices[0].message.content
-                        # st.success("DICTator is here!")
-                        # st.write(Dictt)
-
                         
                         module_lessons = json.loads(Dict)
-                        # st.write(module_lessons)
 
                         for module_name in module_lessons:
                             module_content = ""
@@ -324,7 +277,6 @@ with col2:
                                         model=st.session_state["openai_model"],
                                         messages=[
                                             {"role": "system", "content": module_lesson_prompt},
-                                            # {"role": "user", "content": st.session_state['course_outline']},
                                         ]
                                     )
                                     complete_course = response.choices[0].message.content
@@ -340,7 +292,6 @@ with col2:
                                     model=st.session_state["openai_model"],
                                     messages=[
                                         {"role": "system", "content": quizzy_prompt_final},
-                                        # {"role": "user", "content": st.session_state['course_outline']},
                                     ]
                                 )
                                 quiz_questions = res.choices[0].message.content
@@ -348,7 +299,6 @@ with col2:
                                 st.success(f"Quiz time!! Generated quiz questions for {module_name}")
                                 with st.expander("Click to view!"):
                                     st.write(quiz_questions)
-
 
                                 if "pdf" not in st.session_state:
                                     complete_course_content = module_content + "\n\n" + quiz_questions
@@ -360,7 +310,6 @@ with col2:
                                 st.download_button(label=button_label, data=b64, file_name="course.pdf", mime="application/pdf", key="download_pdf_button", help="Click me to download PDF 😌")
 
                             break
-
 
     else:
         st.write("Your generated content will appear here.")
