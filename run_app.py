@@ -17,7 +17,9 @@ def main():
     cmd = [
         sys.executable, "-m", "streamlit", "run", "app.py",
         "--server.port", port,
-        "--server.address", "0.0.0.0"
+        "--server.address", "0.0.0.0",
+        "--server.headless", "true",
+        "--browser.gatherUsageStats", "false"
     ]
     
     print(f"Starting Streamlit on port {port}...")
