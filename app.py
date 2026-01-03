@@ -3,7 +3,7 @@ import os
 import json
 import base64
 import time
-from utils import generate_pdf, load_chat_history, save_chat_history
+from utils import generate_pdf, generate_ppt, load_chat_history, save_chat_history
 
 # Import Prompts
 from prompts.tabler_prompt import TABLER_PROMPT
@@ -42,7 +42,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Try importing OpenAI, handle gracefully if missing
+# Try importing OpenAI
 try:
     from openai import OpenAI
     from dotenv import load_dotenv
@@ -79,11 +79,13 @@ with st.sidebar:
         st.session_state.clear()
         st.rerun()
 
-# Initialize session state for data persistence
+# Initialize session state
 if "course_outline" not in st.session_state:
     st.session_state["course_outline"] = None
 if "module_dict" not in st.session_state:
     st.session_state["module_dict"] = None
+if "final_content" not in st.session_state:
+    st.session_state["final_content"] = None
 
 # --- Logic Helpers ---
 def get_api_client():
@@ -129,7 +131,7 @@ with tab1:
             submitted = st.form_submit_button("✨ Generate Outline", type="primary")
 
     with col_info:
-        st.info("### How it works\n1. **Define**: Enter the topic and parameters for your course.\n2. **Generate**: AI creates a structured outline based on Bloom's Taxonomy.\n3. **Review**: Check the outline and proceed to generate full lesson content.\n4. **Export**: Download the result as a PDF.")
+        st.info("### How it works\n1. **Define**: Enter the topic and parameters for your course.\n2. **Generate**: AI creates a structured outline based on Bloom's Taxonomy.\n3. **Review**: Check and Edit the outline.\n4. **Export**: Generate full lesson content and export to PDF/PPT.")
         if not HAS_OPENAI:
             st.error("❌ OpenAI library not found. Please rebuild the app.")
         elif not get_api_client():
@@ -165,11 +167,19 @@ with tab1:
 
 # TAB 2: Outline Review
 with tab2:
-    if st.session_state['course_outline']:
-        st.subheader("📝 Review Course Outline")
+    if st.session_state.get('course_outline'):
+        st.subheader("📝 Review & Edit Course Outline")
+        st.caption("You can edit the outline below before generating the full content.")
         
-        with st.container(border=True):
-            st.markdown(st.session_state['course_outline'])
+        # Make outline editable
+        edited_outline = st.text_area(
+            "Course Outline", 
+            value=st.session_state['course_outline'], 
+            height=400,
+            label_visibility="collapsed"
+        )
+        
+        st.session_state['course_outline'] = edited_outline
         
         st.write("---")
         
@@ -201,7 +211,7 @@ with tab3:
                         status.update(label="Structure analyzed!", state="complete", expanded=False)
                 except Exception as e:
                     status.update(label="Error parsing outline", state="error")
-                    st.error(f"Parsing Error: {e}")
+                    st.error(f"Parsing Error: {e}. Please ensure the outline matches the expected format.")
                     st.stop()
 
         # 2. Generate Content
@@ -221,11 +231,8 @@ with tab3:
             # Container for results
             results_container = st.container()
 
-            # We iterate and generate, accumulating text
-            # Note: In a real app, we might want to cache individual lessons to avoid re-generating on rerun
-            # For now, we generate everything in one go if it's not already in a "final_content" state variable.
-            
-            if "final_content" not in st.session_state:
+            # Generate if not already generated
+            if not st.session_state.get("final_content"):
                 
                 for module, lessons in module_data.items():
                     module_text = f"# {module}\n\n"
@@ -258,25 +265,54 @@ with tab3:
             # Display Final Result
             with results_container:
                 st.subheader("Course Content Preview")
-                with st.expander("📄 View Full Content", expanded=False):
-                    st.markdown(st.session_state["final_content"])
+                
+                col_d1, col_d2 = st.columns(2)
                 
                 # PDF Generation
                 if st.session_state.get("final_content"):
-                    pdf = generate_pdf(st.session_state["final_content"], "course.pdf")
-                    if pdf:
-                        try:
-                            pdf_bytes = pdf.output(dest="S").encode("latin-1")
-                            b64 = base64.b64encode(pdf_bytes).decode()
-                            
-                            st.download_button(
-                                label="📥 Download Course PDF",
-                                data=pdf_bytes,
-                                file_name="Course_Content.pdf",
-                                mime="application/pdf",
-                                type="primary"
-                            )
-                        except Exception as e:
-                            st.error(f"PDF encoding error: {e}")
+                    
+                    # Generate Files on the fly
+                    pdf_result = generate_pdf(st.session_state["final_content"], "course.pdf")
+                    ppt_result = generate_ppt(st.session_state["final_content"], "course.pptx")
+                    
+                    with col_d1:
+                        if pdf_result:
+                            try:
+                                # FPDF output returns a string/bytes depending on usage. 
+                                # Here we rely on file saving in utils, then reading it back.
+                                with open("course.pdf", "rb") as f:
+                                    pdf_data = f.read()
+                                
+                                st.download_button(
+                                    label="📄 Download Course PDF",
+                                    data=pdf_data,
+                                    file_name=f"{st.session_state.get('course_name', 'Course')}.pdf",
+                                    mime="application/pdf",
+                                    type="primary"
+                                )
+                            except Exception as e:
+                                st.error(f"PDF download error: {e}")
+                    
+                    with col_d2:
+                        if ppt_result:
+                            try:
+                                with open("course.pptx", "rb") as f:
+                                    ppt_data = f.read()
+                                    
+                                st.download_button(
+                                    label="📊 Download Course PPT",
+                                    data=ppt_data,
+                                    file_name=f"{st.session_state.get('course_name', 'Course')}.pptx",
+                                    mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                                    type="primary"
+                                )
+                            except Exception as e:
+                                st.error(f"PPT download error: {e}")
+                        else:
+                            st.warning("PPT generation failed or library missing.")
+
+                with st.expander("👀 View Full Text Content", expanded=False):
+                    st.markdown(st.session_state["final_content"])
+                    
     else:
          st.info("👈 Approve the outline in the previous tab to start content generation.")
