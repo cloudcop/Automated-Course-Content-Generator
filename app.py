@@ -5,10 +5,6 @@ import json
 import base64
 import time
 from utils import generate_pdf, load_chat_history, save_chat_history
-# Prompts are not strictly needed for dummy mode but keeping imports to avoid breaking file structure expectations
-from prompts.tabler_prompt import TABLER_PROMPT
-from prompts.dictator_prompt import DICTATOR_PROMPT
-from prompts.quizzy_prompt import QUIZZY_PROMPT
 
 # Customizing the page configuration
 st.set_page_config(
@@ -25,7 +21,7 @@ st.title("Automated Course Content Generator 🤖 (Dummy Mode)")
 USER_AVATAR = "👤"
 BOT_AVATAR = "🤖"
 
-# Dummy Data Constants
+# --- Dummy Data Constants ---
 DUMMY_OUTLINE = """Course Title: Introduction to Artificial Intelligence
 Course details: 4 Weeks, 2 Modules
 Overview: This course provides a foundational understanding of AI concepts.
@@ -78,6 +74,15 @@ d) Super-market
 Answer: a) Supervised
 """
 
+# --- Helper Functions ---
+def safe_rerun():
+    if hasattr(st, 'rerun'):
+        st.rerun()
+    else:
+        st.experimental_rerun()
+
+# --- Main Logic ---
+
 # Initialize or load chat history
 if "messages" not in st.session_state:
     st.session_state.messages = load_chat_history()
@@ -88,8 +93,8 @@ with st.sidebar:
         st.session_state.messages = []
         save_chat_history([])
 
-# Example of using columns for advanced layouts
-col1, col2 = st.columns([3.0, 0.1, 7.0])
+# Layout
+col1, col2 = st.columns([3.0, 7.0])
 
 with col1:
     st.header("Course Details 📋")
@@ -125,111 +130,107 @@ with col1:
         if "pdf" in st.session_state:
             new_course_button = st.button("Start a New Course", help="Click me to start a new course!💡")
             if new_course_button:
-                st.session_state.course_name = ""
-                st.session_state.target_audience_edu_level = ""
-                st.session_state.difficulty_level = ""
-                st.session_state.num_modules = 1
-                st.session_state.course_duration = ""
-                st.session_state.course_credit = ""
-                st.session_state.pdf = False
-                st.experimental_rerun()
+                # Reset state
+                keys_to_reset = ["course_name", "target_audience_edu_level", "difficulty_level", 
+                                 "num_modules", "course_duration", "course_credit", "pdf", 
+                                 "course_outline", "buttons_visible", "complete_course", "modifications"]
+                for key in keys_to_reset:
+                    if key in st.session_state:
+                        del st.session_state[key]
+                safe_rerun()
 
 with col2:
     st.header("Generated Course Content 📝")
-    # Display the generated content here
-    if generate_button and "pdf" not in st.session_state:
+    
+    # 1. Generate Outline
+    if generate_button:
         # Include user selections in the message history
         user_selections = f"Course Name: {course_name}\nTarget Audience Edu Level: {target_audience_edu_level}\nDifficulty Level: {difficulty_level}\nNo. of Modules: {num_modules}\nCourse Duration: {course_duration}\nCourse Credit: {course_credit}"
         st.session_state.messages.append({"role": "user", "content": user_selections})
+        save_chat_history(st.session_state.messages)
 
-        # MOCK: Prompt generation
-        generated_prompt = "Mock generated prompt based on user input."
-        
         with st.spinner("Generating course outline (Dummy Mode)..."):
-            time.sleep(1.5) # Simulate API latency
-            Course_outline = DUMMY_OUTLINE
+            time.sleep(1.0) # Simulate delay
+            st.session_state['course_outline'] = DUMMY_OUTLINE
+            st.session_state['buttons_visible'] = True
             st.success("Course outline generated successfully!")
 
-            st.session_state['course_outline'] = Course_outline
-            st.session_state['buttons_visible'] = True
-
-    if 'course_outline' in st.session_state and "pdf" not in st.session_state:
-        with st.expander("Course Outline"):
+    # 2. Display Outline & Action Buttons
+    if 'course_outline' in st.session_state:
+        with st.expander("Course Outline", expanded=True):
             st.write(st.session_state['course_outline'])
 
         if 'buttons_visible' in st.session_state and st.session_state['buttons_visible']:
-            button1, button2 = st.columns([1, 2])
-            with button1:
-                complete_course_button = st.button("Looks cool. Generate complete course!", help="Click me to generate complete course!😍")
-            with button2:
-                modifications_button = st.button("Wai wait..!, I need to make some modifications", help="Click me to modify the course outline!🧐")
+            b1, b2 = st.columns([1, 2])
+            with b1:
+                if st.button("Looks cool. Generate complete course!", key="btn_complete"):
+                    st.session_state['complete_course'] = True
+                    st.session_state['modifications'] = False
+            with b2:
+                if st.button("Wait, I need modifications", key="btn_modify"):
+                    st.session_state['modifications'] = True
+                    st.session_state['complete_course'] = False
 
-            # Handle button actions
-            if complete_course_button:
-                st.session_state['complete_course'] = True
-                st.session_state['modifications'] = False
-            elif modifications_button:
-                st.session_state['modifications'] = True
-                st.session_state['complete_course'] = False
+    # 3. Handle Modifications
+    if st.session_state.get('modifications') is True:
+        mod_text = st.text_input("Please enter the modifications you'd like to make:")
+        if mod_text:
+            st.write("Applying modifications (Dummy Mode)...")
+            st.session_state['course_outline'] = DUMMY_OUTLINE + f"\n\n(Modified with: {mod_text})"
+            st.success("Modifications applied! You can now click 'Generate complete course' above.")
+            # We revert modifications state so the user can proceed
+            st.session_state['modifications'] = False 
 
-            if 'complete_course' in st.session_state and st.session_state['complete_course']:
-                with st.spinner("Generating complete course (Dummy Mode)..."):
-                    # MOCK: Convert outline to JSON
-                    time.sleep(1)
-                    Dict = DUMMY_DICTATOR_JSON
-                    
-                    module_lessons = json.loads(Dict)
+    # 4. Generate Complete Course
+    if st.session_state.get('complete_course') is True:
+        with st.spinner("Generating complete course (Dummy Mode)..."):
+            time.sleep(1)
+            module_lessons = json.loads(DUMMY_DICTATOR_JSON)
+            
+            full_content_accumulator = ""
 
-                    for module_name in module_lessons:
-                        module_content = ""
+            for module_name, lessons in module_lessons.items():
+                # Module Content
+                module_text = ""
+                for lesson_name in lessons:
+                     with st.spinner(f"Generating content for {module_name}, {lesson_name}"):
+                        time.sleep(0.3)
+                        content = DUMMY_CONTENT_TEMPLATE.format(lesson_name=lesson_name, module_name=module_name)
+                        module_text += content + "\n\n"
+                        st.write(f"**{lesson_name}** generated.")
+                        with st.expander(f"View {lesson_name}"):
+                            st.write(content)
 
-                        for lesson_name in module_lessons[module_name]:
-                            
-                            with st.spinner(f"Generating content for {module_name}, {lesson_name}"):
-                                # MOCK: Generate lesson content
-                                time.sleep(0.5)
-                                complete_course = DUMMY_CONTENT_TEMPLATE.format(lesson_name=lesson_name, module_name=module_name)
-                                st.success(f"Generated content for {module_name}, {lesson_name}")
-
-                                with st.expander("Click to view!"):
-                                    st.write(complete_course)
-                                
-                                module_content +=  complete_course + "\n"*2
-                        
-                        # MOCK: Generate Quiz
-                        with st.spinner(f"Generating quiz questions for {module_name}"):
-                            time.sleep(0.5)
-                            quiz_questions = DUMMY_QUIZ
-
-                            st.success(f"Quiz time!! Generated quiz questions for {module_name}")
-                            with st.expander("Click to view!"):
-                                st.write(quiz_questions)
-
-                            if "pdf" not in st.session_state:
-                                complete_course_content = module_content + "\n\n" + quiz_questions
-                                st.session_state.pdf = generate_pdf(complete_course_content, "course.pdf")
-                                b64 = base64.b64encode(st.session_state.pdf.output(dest="S").encode('latin1')).decode()
-                                st.success("Your PDF file is ready!")
-
-                            button_label = "Download PDF"
-                            st.download_button(label=button_label, data=b64, file_name="course.pdf", mime="application/pdf", key="download_pdf_button")
-                                    
-                        break # Break after first module for dummy demo speed
+                # Quiz
+                with st.spinner(f"Generating quiz for {module_name}"):
+                    time.sleep(0.3)
+                    quiz = DUMMY_QUIZ
+                    st.write(f"**Quiz for {module_name}** generated.")
+                    with st.expander("View Quiz"):
+                        st.write(quiz)
+                    module_text += "\n\n" + quiz
                 
-            elif 'modifications' in st.session_state:
-                modifications = st.text_input("Please enter the modifications you'd like to make:")
-                if modifications:
-                    st.session_state.modifications = modifications
-                    
-                    # MOCK: Modifying course outline
-                    st.write("Applying modifications (Dummy Mode)...")
-                    st.session_state['course_outline'] = DUMMY_OUTLINE + f"\n(Modified with: {modifications})"
-                    
-                    # Trigger generation flow again or just show updated outline
-                    st.success("Modifications applied! (Click 'Generate complete course' to proceed with original dummy flow)")
-
-    else:
-        st.write("Your generated content will appear here.")
-
-# Save chat history after each interaction
-save_chat_history(st.session_state.messages)
+                full_content_accumulator += module_text + "\n\n"
+                
+                # In dummy mode, we just break after one module to keep it simple, or loop all
+                # Let's loop all for better feel
+            
+            # PDF Generation
+            if "pdf" not in st.session_state:
+                st.session_state.pdf = True # Mark as done
+                # We generate PDF from the accumulated content
+                pdf_obj = generate_pdf(full_content_accumulator, "course.pdf")
+                b64 = base64.b64encode(pdf_obj.output(dest="S").encode('latin1')).decode()
+                
+                st.success("All content generated! Your PDF is ready.")
+                st.download_button(
+                    label="Download PDF", 
+                    data=b64, 
+                    file_name="course.pdf", 
+                    mime="application/pdf"
+                )
+        
+        # Prevent re-running generation loop endlessly by checking if we just finished
+        # In Streamlit, buttons reset on rerun, but here we used session_state flag.
+        # Ideally we stop showing the 'Generating...' spinner once done.
+        # But for this simple dummy flow, the download button appearing is the end state.
