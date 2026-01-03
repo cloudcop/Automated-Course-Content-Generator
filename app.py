@@ -146,84 +146,83 @@ with col2:
         client = get_api_client()
         if not client:
              st.error("API Key lost. Please re-enter in sidebar.")
-             st.stop()
-
-        if 'module_dict' not in st.session_state:
-            with st.spinner("Parsing Outline Structure..."):
-                dict_prompt = DICTATOR_PROMPT + "\n\nCourse Outline:\n" + st.session_state['course_outline']
-                json_str = get_completion(client, dict_prompt, model="gpt-3.5-turbo")
-                try:
-                    if json_str:
-                        json_str = json_str.replace("```json", "").replace("```", "")
-                        st.session_state['module_dict'] = json.loads(json_str)
-                except Exception as e:
-                    st.error(f"Failed to parse outline: {e}")
-                    st.stop()
-
-        if 'module_dict' in st.session_state:
-            module_data = st.session_state['module_dict']
-            full_text_accumulator = ""
-
-            # Progress bar
-            total_items = sum(len(lessons) for lessons in module_data.values()) + len(module_data)
-            progress_bar = st.progress(0)
-            completed_items = 0
-
-            # Placeholder for live content updates
-            content_placeholder = st.empty()
-
-            for module, lessons in module_data.items():
-                module_content = f"# {module}\n\n"
-                
-                # Generate Lessons
-                for lesson in lessons:
-                    with st.spinner(f"Writing {lesson}..."):
-                        lesson_prompt = generate_coursify_prompt(lesson, module, course_name)
-                        # Fallback to 3.5 if 4 is too expensive or unavailable for user
-                        lesson_content = get_completion(client, lesson_prompt, model="gpt-3.5-turbo") 
-                        if not lesson_content: lesson_content = "Error generating content."
+             # Removed st.stop() to keep UI visible, just return
+        else:
+            if 'module_dict' not in st.session_state:
+                with st.spinner("Parsing Outline Structure..."):
+                    dict_prompt = DICTATOR_PROMPT + "\n\nCourse Outline:\n" + st.session_state['course_outline']
+                    json_str = get_completion(client, dict_prompt, model="gpt-3.5-turbo")
+                    try:
+                        if json_str:
+                            json_str = json_str.replace("```json", "").replace("```", "")
+                            st.session_state['module_dict'] = json.loads(json_str)
+                    except Exception as e:
+                        st.error(f"Failed to parse outline: {e}")
                         
-                        module_content += f"{lesson_content}\n\n---\n\n"
+            if 'module_dict' in st.session_state:
+                module_data = st.session_state['module_dict']
+                full_text_accumulator = ""
+
+                # Progress bar
+                total_items = sum(len(lessons) for lessons in module_data.values()) + len(module_data)
+                progress_bar = st.progress(0)
+                completed_items = 0
+
+                # Placeholder for live content updates
+                content_placeholder = st.empty()
+
+                for module, lessons in module_data.items():
+                    module_content = f"# {module}\n\n"
+                    
+                    # Generate Lessons
+                    for lesson in lessons:
+                        with st.spinner(f"Writing {lesson}..."):
+                            lesson_prompt = generate_coursify_prompt(lesson, module, course_name)
+                            # Fallback to 3.5 if 4 is too expensive or unavailable for user
+                            lesson_content = get_completion(client, lesson_prompt, model="gpt-3.5-turbo") 
+                            if not lesson_content: lesson_content = "Error generating content."
+                            
+                            module_content += f"{lesson_content}\n\n---\n\n"
+                            
+                            # Update UI live
+                            with content_placeholder.container():
+                                st.markdown(f"### Currently writing: {lesson}")
+                            
+                            completed_items += 1
+                            progress_bar.progress(completed_items / total_items)
+
+                    # Generate Quiz
+                    with st.spinner(f"Creating Quiz for {module}..."):
+                        quiz_prompt = QUIZZY_PROMPT + f"\n\nModule Content:\n{module_content}"
+                        quiz_content = get_completion(client, quiz_prompt)
+                        if not quiz_content: quiz_content = "Error generating quiz."
                         
-                        # Update UI live
-                        with content_placeholder.container():
-                            st.markdown(f"### Currently writing: {lesson}")
+                        module_content += f"## Quiz\n{quiz_content}\n\n"
                         
                         completed_items += 1
                         progress_bar.progress(completed_items / total_items)
 
-                # Generate Quiz
-                with st.spinner(f"Creating Quiz for {module}..."):
-                    quiz_prompt = QUIZZY_PROMPT + f"\n\nModule Content:\n{module_content}"
-                    quiz_content = get_completion(client, quiz_prompt)
-                    if not quiz_content: quiz_content = "Error generating quiz."
+                    full_text_accumulator += module_content + "\n\n"
                     
-                    module_content += f"## Quiz\n{quiz_content}\n\n"
-                    
-                    completed_items += 1
-                    progress_bar.progress(completed_items / total_items)
+                    # Show completed module in expander
+                    with st.expander(f"✅ {module} (Complete)"):
+                        st.markdown(module_content)
 
-                full_text_accumulator += module_content + "\n\n"
-                
-                # Show completed module in expander
-                with st.expander(f"✅ {module} (Complete)"):
-                    st.markdown(module_content)
+                content_placeholder.empty()
 
-            content_placeholder.empty()
-
-            # PDF Generation
-            if full_text_accumulator:
-                pdf = generate_pdf(full_text_accumulator, "course_content.pdf")
-                if pdf:
-                    try:
-                        b64 = base64.b64encode(pdf.output(dest="S").encode('latin1')).decode()
-                        st.success("🎉 Course Generation Complete!")
-                        st.download_button(
-                            label="Download PDF Course",
-                            data=b64,
-                            file_name=f"{course_name.replace(' ', '_')}_Course.pdf",
-                            mime="application/pdf",
-                            type="primary"
-                        )
-                    except Exception as e:
-                        st.error(f"PDF Download Error: {e}")
+                # PDF Generation
+                if full_text_accumulator:
+                    pdf = generate_pdf(full_text_accumulator, "course_content.pdf")
+                    if pdf:
+                        try:
+                            b64 = base64.b64encode(pdf.output(dest="S").encode('latin1')).decode()
+                            st.success("🎉 Course Generation Complete!")
+                            st.download_button(
+                                label="Download PDF Course",
+                                data=b64,
+                                file_name=f"{course_name.replace(' ', '_')}_Course.pdf",
+                                mime="application/pdf",
+                                type="primary"
+                            )
+                        except Exception as e:
+                            st.error(f"PDF Download Error: {e}")
