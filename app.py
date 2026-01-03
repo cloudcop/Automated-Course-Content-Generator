@@ -211,9 +211,6 @@ with col2:
                     module_text += "\n\n" + quiz
                 
                 full_content_accumulator += module_text + "\n\n"
-                
-                # In dummy mode, we just break after one module to keep it simple, or loop all
-                # Let's loop all for better feel
             
             # PDF Generation
             if "pdf" not in st.session_state:
@@ -229,8 +226,3 @@ with col2:
                     file_name="course.pdf", 
                     mime="application/pdf"
                 )
-        
-        # Prevent re-running generation loop endlessly by checking if we just finished
-        # In Streamlit, buttons reset on rerun, but here we used session_state flag.
-        # Ideally we stop showing the 'Generating...' spinner once done.
-        # But for this simple dummy flow, the download button appearing is the end state.
